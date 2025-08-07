@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melingua Connect</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- React and Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #111827; /* bg-gray-900 */
+            color: #f9fafb;
+            overflow: hidden;
+        }
+        
+        /* --- Background Glow Effect --- */
+        .background-glow::before {
+            content: '';
+            position: fixed;
+            bottom: -20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 40%;
+            background: radial-gradient(circle, rgba(79, 70, 229, 0.3) 0%, rgba(17, 24, 39, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* --- Custom Scrollbar --- */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        
+        textarea { resize: none; }
+
+        /* --- Animation for elements fading in --- */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        
+        /* --- Microphone listening animation --- */
+        .listening-glow {
+            box-shadow: 0 0 15px 4px rgba(239, 68, 68, 0.6);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 15px 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        /* --- Sign Language Modal Styles --- */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .modal-content {
+            background-color: #181818;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            height: 80%;
+            max-height: 600px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-body {
+            flex-grow: 1;
+            padding: 1rem;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* --- Style for highlighted keywords --- */
+        .keyword-button {
+            color: #93c5fd; /* light blue */
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+        }
+        .keyword-button:hover {
+            color: #60a5fa; /* slightly darker blue */
+            text-decoration-thickness: 2px;
+        }
+
+        /* --- Style for Recommendations Panel --- */
+        .recommendations-panel {
+            background-color: #2c2c2c;
+            border-left: 3px solid #60a5fa;
+            padding: 0.75rem 1rem;
+            margin-left: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0 8px 8px 0;
+            animation: fadeIn 0.4s ease-out;
+        }
+        .recommendations-panel h4 {
+            font-weight: 600;
+            color: #a5b4fc;
+            margin-bottom: 0.5rem;
+        }
+        .recommendations-panel ul {
+            list-style-type: disc;
+            padding-left: 1.25rem;
+            color: #d1d5db;
+        }
+        .recommendations-panel p {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 0.75rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 0.5rem;
+        }
+    </style>
+</head>
+<body class="background-glow">
+    <div id="root"></div>
+
+    {% raw %}
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- UI Components ---
+
+        const Sidebar = ({ conversations, activeConversationId, onNewChat, onSelectChat, onDeleteChat }) => (
+            <aside className="w-72 bg-[#181818] p-4 flex-col hidden md:flex border-r border-white/10">
+                <button onClick={onNewChat} className="w-full bg-white/90 text-black font-semibold rounded-lg flex items-center justify-center gap-2 py-2.5 mb-6 hover:bg-white/70 transition-colors">
+                    <i className="bi bi-plus-lg"></i> New Chat
+                </button>
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                    <h2 className="text-xs text-gray-400 font-semibold mb-2 px-2 tracking-wider">CONVERSATIONS</h2>
+                    <ul>
+                        {conversations.map((convo, index) => (
+                            <li key={convo.id} className={`flex items-center justify-between group fade-in rounded-md ${activeConversationId === convo.id ? 'bg-white/10' : 'hover:bg-white/5'}`} style={{ animationDelay: `${index * 50}ms` }}>
+                                <a href="#" 
+                                   onClick={(e) => { e.preventDefault(); onSelectChat(convo.id); }}
+                                   className={`block text-sm p-2.5 truncate transition-colors duration-200 flex-1 ${activeConversationId === convo.id ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                                    {convo.messages.find(m => m.type === 'user')?.text || 'New Conversation'}
+                                </a>
+                                <button onClick={(e) => {e.stopPropagation(); onDeleteChat(convo.id)}} className="p-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i className="bi bi-trash3-fill"></i>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </aside>
+        );
+
+        const LanguageSelector = ({ languages, selectedLang, onSelectLang, label }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const dropdownRef = useRef(null);
+            const selectedLangName = languages.find(l => l.code === selectedLang)?.name || "Select";
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            return (
+                <div className="relative" ref={dropdownRef}>
+                    <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors">
+                        {label}: <span className="font-semibold text-white">{selectedLangName}</span> <i className={`bi bi-chevron-down transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {isOpen && (
+                        <div className="absolute top-full mt-2 right-0 w-56 bg-gray-800 border border-white/10 rounded-lg shadow-2xl z-10 flex flex-col fade-in">
+                            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                {languages.map(lang => (
+                                    <button
+                                        key={lang.code}
+                                        onClick={() => { onSelectLang(lang.code); setIsOpen(false); }}
+                                        className="w-full text-left text-sm px-4 py-2 hover:bg-indigo-600 transition-colors"
+                                    >
+                                        {lang.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        const Header = ({ sourceLang, targetLang, setSourceLang, setTargetLang, languages, onSwap }) => (
+            <header className="p-4 flex items-center justify-between border-b border-white/10">
+                <h1 className="text-xl font-bold">MediLingua Connect</h1>
+                <div className="flex items-center gap-4">
+                    <LanguageSelector languages={languages} selectedLang={sourceLang} onSelectLang={setSourceLang} label="From" />
+                    <button onClick={onSwap} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                        <i className="bi bi-arrow-left-right text-gray-300"></i>
+                    </button>
+                    <LanguageSelector languages={languages} selectedLang={targetLang} onSelectLang={setTargetLang} label="To" />
+                </div>
+            </header>
+        );
+
+        const MessageBubble = ({ message, onSpeak, isSpeaking, onShowSignLanguage, onToggleRecommendations, onShowVisualAid }) => {
+            const isUser = message.type === 'user';
+            const bubbleClass = isUser 
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white' 
+                : 'bg-[#2E2E2E] text-gray-200';
+
+            const renderMessageWithKeywords = () => {
+                if (isUser || !message.keywords || message.keywords.length === 0) {
+                    return <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>;
+                }
+
+                const keywordMap = new Map();
+                message.keywords.forEach(kw => {
+                    keywordMap.set(kw.term.toLowerCase(), { english: kw.english, visual_aid_search: kw.visual_aid_search });
+                });
+
+                const sortedTerms = message.keywords.map(kw => kw.term).sort((a, b) => b.length - a.length);
+                const escapedTerms = sortedTerms.map(term => term.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"));
+                const regex = new RegExp(`(${escapedTerms.join("|")})`, "gi");
+                const parts = message.text.split(regex);
+
+                return (
+                    <p className="whitespace-pre-wrap leading-relaxed">
+                        {parts.map((part, index) => {
+                            const keywordData = keywordMap.get(part.toLowerCase());
+                            if (keywordData) {
+                                return (
+                                    <button
+                                        key={index}
+                                        className="keyword-button"
+                                        onClick={() => onShowSignLanguage(keywordData.english)}
+                                    >
+                                        {part}
+                                    </button>
+                                );
+                            }
+                            return <span key={index}>{part}</span>;
+                        })}
+                    </p>
+                );
+            };
+            
+            const firstVisualAidSearch = message.keywords?.find(kw => kw.visual_aid_search)?.visual_aid_search;
+
+            return (
+                <div className={`w-full flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-2xl p-4 rounded-2xl mb-4 relative fade-in ${bubbleClass} ${isSpeaking ? 'ring-2 ring-sky-400' : ''}`}>
+                        {renderMessageWithKeywords()}
+                        <div className="absolute -bottom-3 -right-1 flex items-center gap-1">
+                            {!isUser && (
+                                <button onClick={() => onSpeak(message.text)} className="w-8 h-8 bg-gray-600 hover:bg-sky-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
+                                   <i className={`bi ${isSpeaking ? 'bi-stop-circle-fill text-sky-300' : 'bi-volume-up-fill'}`}></i>
+                                </button>
+                            )}
+                            {!isUser && firstVisualAidSearch && (
+                                <button onClick={() => onShowVisualAid(firstVisualAidSearch)} title="Show Visual Aid" className="w-8 h-8 bg-gray-600 hover:bg-green-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
+                                    <i className="bi bi-image-fill text-green-300"></i>
+                                </button>
+                            )}
+                            {!isUser && message.recommendations && message.recommendations.length > 0 && (
+                                <button onClick={() => onToggleRecommendations(message.id)} title="Show Analysis" className="w-8 h-8 bg-gray-600 hover:bg-indigo-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
+                                    <i className="bi bi-info-circle-fill text-indigo-300"></i>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const RecommendationsPanel = ({ recommendations }) => (
+            <div className="recommendations-panel">
+                <h4>Based on your query, consulting these departments might be helpful:</h4>
+                <ul>
+                    {recommendations.map((dept, index) => (
+                        <li key={index}>{dept}</li>
+                    ))}
+                </ul>
+                <p>This is not a medical diagnosis. Please consult a qualified healthcare professional for advice.</p>
+            </div>
+        );
+
+        const ThinkingIndicator = () => (
+            <div className="w-full flex justify-start">
+                <div className="max-w-2xl p-4 rounded-2xl mb-4 bg-[#2E2E2E] flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
+                    <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
+                    <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse"></div>
+                </div>
+            </div>
+        );
+
+        const ChatArea = ({ messages, isLoading, onSpeak, speakingText, onShowSignLanguage, onToggleRecommendations, visibleRecommendations, onShowVisualAid }) => {
+            const scrollRef = useRef(null);
+            useEffect(() => {
+                scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [messages, isLoading]);
+
+            return (
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    {messages.map((msg) => (
+                        <div key={msg.id}>
+                            <MessageBubble 
+                                message={msg} 
+                                onSpeak={onSpeak} 
+                                isSpeaking={speakingText === msg.text} 
+                                onShowSignLanguage={onShowSignLanguage}
+                                onToggleRecommendations={onToggleRecommendations}
+                                onShowVisualAid={onShowVisualAid}
+                            />
+                            {visibleRecommendations[msg.id] && msg.recommendations && msg.recommendations.length > 0 && (
+                                <RecommendationsPanel recommendations={msg.recommendations} />
+                            )}
+                        </div>
+                    ))}
+                    {isLoading && <ThinkingIndicator />}
+                    <div ref={scrollRef} />
+                </div>
+            );
+        };
+
+        const InputBar = ({ onTranslate, onFileTranslate, isLoading, isListening, onMicClick, text, setText }) => {
+            const textareaRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                const el = textareaRef.current;
+                if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                }
+            }, [text]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (text.trim() && !isLoading) {
+                    onTranslate(text);
+                }
+            };
+            
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    onFileTranslate(file);
+                }
+            };
+            
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                }
+            };
+
+            return (
+                <div className="p-4 bg-transparent">
+                    <div className="max-w-3xl mx-auto bg-gray-900/50 backdrop-blur-lg border border-white/10 rounded-2xl p-2 pl-4 shadow-2xl focus-within:border-indigo-500 transition-colors flex items-end gap-2">
+                         <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileChange} 
+                            className="hidden" 
+                            accept=".png,.jpg,.jpeg,.txt,.pdf,.doc,.docx,.csv"
+                         />
+                         <button onClick={() => fileInputRef.current.click()} type="button" title="Attach File" className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-transparent rounded-full hover:bg-gray-500/30 text-gray-400 hover:text-white transition-all duration-300">
+                            <i className="bi bi-paperclip"></i>
+                        </button>
+                         <button onClick={onMicClick} type="button" className={`w-10 h-10 flex-shrink-0 flex items-center justify-center bg-transparent rounded-full hover:bg-red-500/30 transition-all duration-300 ${isListening ? 'text-red-500 listening-glow' : 'text-gray-400'}`}>
+                            <i className="bi bi-mic-fill"></i>
+                        </button>
+                        <form onSubmit={handleSubmit} className="flex-1 flex items-end">
+                            <textarea
+                                ref={textareaRef}
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Type, speak, or upload a file..."
+                                rows="1"
+                                className="w-full bg-transparent p-2 text-gray-100 placeholder-gray-400 focus:outline-none"
+                                style={{ maxHeight: '200px' }}
+                            />
+                            <button type="submit" disabled={isLoading || !text.trim()} className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-gray-700 rounded-full hover:bg-indigo-600 disabled:bg-gray-800 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-110">
+                                <i className="bi bi-arrow-up text-white"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+        
+        const SignLanguageModal = ({ videoUrl, onClose }) => {
+            if (!videoUrl) return null;
+
+            return (
+                <div className="modal-backdrop" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 className="text-lg font-semibold">Sign Language Video</h2>
+                            <button onClick={onClose} className="modal-close-btn">&times;</button>
+                        </div>
+                        <div className="modal-body">
+                            <iframe
+                                src={videoUrl}
+                                title="Sign Language Video"
+                                width="100%"
+                                height="100%"
+                                frameBorder="0"
+                                allowFullScreen
+                            ></iframe>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        const App = () => {
+            const initialConvo = { id: Date.now(), messages: [] };
+            const [conversations, setConversations] = useState(() => JSON.parse(localStorage.getItem('conversations') || 'null') || [initialConvo]);
+            const [activeConversationId, setActiveConversationId] = useState(() => JSON.parse(localStorage.getItem('activeConversationId') || 'null') || conversations[0]?.id || initialConvo.id);
+            
+            const [languages, setLanguages] = useState([]);
+            const [sourceLang, setSourceLang] = useState('en');
+            const [targetLang, setTargetLang] = useState('es');
+            const [isLoading, setIsLoading] = useState(false);
+            
+            const [speakingText, setSpeakingText] = useState(null);
+            const [isListening, setIsListening] = useState(false);
+            const [text, setText] = useState("");
+            const [signVideoUrl, setSignVideoUrl] = useState('');
+            const [visibleRecommendations, setVisibleRecommendations] = useState({});
+            const recognitionRef = useRef(null);
+
+            const API_BASE_URL = '';
+
+            useEffect(() => {
+                localStorage.setItem('conversations', JSON.stringify(conversations));
+                localStorage.setItem('activeConversationId', JSON.stringify(activeConversationId));
+            }, [conversations, activeConversationId]);
+            
+            useEffect(() => {
+                const fetchLanguages = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/languages`);
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        const data = await response.json();
+                        setLanguages(data);
+                        if (data.some(l => l.code === 'en')) setSourceLang('en');
+                        const spanish = data.find(l => l.code === 'es');
+                        if (spanish) setTargetLang('es');
+                        else if (data.length > 1) setTargetLang(data.find(l => l.code !== 'en')?.code || data[1].code);
+                    } catch (error) { console.error("Failed to fetch languages:", error); }
+                };
+                fetchLanguages();
+            }, []);
+            
+            useEffect(() => {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) return;
+                
+                recognitionRef.current = new SpeechRecognition();
+                const recognition = recognitionRef.current;
+                recognition.continuous = true;
+                recognition.interimResults = true;
+
+                recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = 0; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    setText(transcript);
+                };
+                recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+                recognition.onend = () => setIsListening(false);
+                
+                return () => recognition.stop();
+            }, []);
+
+            const handleMicClick = () => {
+                const recognition = recognitionRef.current;
+                if (!recognition) return;
+                
+                if (isListening) {
+                    recognition.stop();
+                } else {
+                    setText("");
+                    recognition.lang = sourceLang;
+                    recognition.start();
+                    setIsListening(true);
+                }
+            };
+            
+            const handleSpeak = (text) => {
+                if (speakingText === text) {
+                    window.speechSynthesis.cancel();
+                    setSpeakingText(null);
+                    return;
+                }
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = targetLang;
+                utterance.onstart = () => setSpeakingText(text);
+                utterance.onend = () => setSpeakingText(null);
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utterance);
+            };
+
+            const handleNewChat = () => {
+                const newConvo = { id: Date.now(), messages: [] };
+                setConversations(prev => [newConvo, ...prev]);
+                setActiveConversationId(newConvo.id);
+            };
+            
+            const handleDeleteChat = (idToDelete) => {
+                const newConversations = conversations.filter(convo => convo.id !== idToDelete);
+                setConversations(newConversations);
+                if (activeConversationId === idToDelete) {
+                    setActiveConversationId(newConversations[0]?.id || null);
+                }
+            };
+
+            const handleSwapLanguages = () => {
+                setSourceLang(targetLang);
+                setTargetLang(sourceLang);
+            };
+
+            const handleShowSignLanguage = (searchText) => {
+                if (!searchText.trim()) return;
+                const encodedText = encodeURIComponent(searchText.trim());
+                const url = `https://www.spreadthesign.com/en.us/search/?q=${encodedText}`;
+                setSignVideoUrl(url);
+            };
+            
+            const handleShowVisualAid = (searchUrl) => {
+                window.open(searchUrl, '_blank');
+            };
+
+            const handleToggleRecommendations = (messageId) => {
+                setVisibleRecommendations(prev => ({
+                    ...prev,
+                    [messageId]: !prev[messageId]
+                }));
+            };
+
+            const handleTranslate = async (textToTranslate) => {
+                if (!textToTranslate.trim() || !sourceLang || !targetLang) return;
+                const userMessage = { id: Date.now(), type: 'user', text: textToTranslate, keywords: [], recommendations: [] };
+                
+                setText("");
+
+                setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessage] } : c));
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/translate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source_lang: sourceLang, target_lang: targetLang, text: textToTranslate })
+                    });
+                    if (!response.ok) throw new Error((await response.json()).error || 'Translation failed');
+                    const data = await response.json();
+                    
+                    const aiMessage = { 
+                        id: Date.now() + 1,
+                        type: 'ai', 
+                        text: data.translated_text,
+                        keywords: data.keywords || [],
+                        recommendations: data.recommendations || []
+                    };
+                    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, aiMessage] } : c));
+                } catch (error) {
+                    console.error("Translation failed:", error);
+                    const errorMessage = { id: Date.now() + 1, type: 'error', text: `Translation failed: ${error.message}`, keywords: [], recommendations: [] };
+                     setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, errorMessage] } : c));
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            
+            const handleFileTranslate = async (file) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_lang', targetLang);
+                
+                const userMessage = { id: Date.now(), type: 'user', text: `File: ${file.name}`, keywords: [], recommendations: [] };
+                setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessage] } : c));
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/translate-file`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!response.ok) throw new Error((await response.json()).error || 'File translation failed');
+                    const data = await response.json();
+
+                    const aiMessage = { 
+                        id: Date.now() + 1,
+                        type: 'ai', 
+                        text: data.translated_text, 
+                        keywords: data.keywords || [], 
+                        recommendations: [] 
+                    };
+                    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, aiMessage] } : c));
+                } catch (error) {
+                    console.error("File translation failed:", error);
+                    const errorMessage = { id: Date.now() + 1, type: 'error', text: `File translation failed: ${error.message}`, keywords: [], recommendations: [] };
+                     setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, errorMessage] } : c));
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0] || initialConvo;
+
+            return (
+                <div className="flex h-screen w-full bg-[#212121]">
+                    <Sidebar 
+                        conversations={conversations}
+                        activeConversationId={activeConversationId}
+                        onNewChat={handleNewChat}
+                        onSelectChat={setActiveConversationId}
+                        onDeleteChat={handleDeleteChat}
+                    />
+                    <main className="flex-1 flex flex-col">
+                        <Header 
+                            sourceLang={sourceLang}
+                            targetLang={targetLang}
+                            setSourceLang={setSourceLang}
+                            setTargetLang={setTargetLang}
+                            languages={languages}
+                            onSwap={handleSwapLanguages}
+                        />
+                        <ChatArea 
+                            messages={activeConversation?.messages || []} 
+                            isLoading={isLoading} 
+                            onSpeak={handleSpeak}
+                            speakingText={speakingText}
+                            onShowSignLanguage={handleShowSignLanguage}
+                            onToggleRecommendations={handleToggleRecommendations}
+                            visibleRecommendations={visibleRecommendations}
+                            onShowVisualAid={handleShowVisualAid}
+                        />
+                        <InputBar 
+                            onTranslate={handleTranslate}
+                            onFileTranslate={handleFileTranslate}
+                            isLoading={isLoading}
+                            isListening={isListening}
+                            onMicClick={handleMicClick}
+                            text={text}
+                            setText={setText}
+                        />
+                    </main>
+                    <SignLanguageModal videoUrl={signVideoUrl} onClose={() => setSignVideoUrl('')} />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    {% endraw %}
+</body>
+</html>
