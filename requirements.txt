@@ -1,0 +1,10 @@
+#use Python 3.11.9
+#to run requirements use 
+#1)python.exe -m pip install --upgrade pip
+#2)pip install -r requirements.txt   
+Flask
+flask-cors
+argostranslate
+PyMuPDF
+python-docx
+pandas
