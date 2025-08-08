@@ -76,7 +76,7 @@ symptom_to_department = {
     "pain": ["General Medicine", "Orthopedics"],
     "heart attack": ["Cardiology", "Emergency"],
     "cancer": ["Oncology"],
-    "diabetes": ["Endocrinology"],
+    "diabetes": ["Endocrinología"],
     "cough": ["Pulmonology", "General Medicine"],
     "fracture": ["Orthopedics", "Emergency"],
     "dizziness": ["Neurology", "ENT"],
@@ -296,6 +296,46 @@ def translate_file_route():
         if 'filepath' in locals() and os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'error': f'An unexpected error occurred: {e}'}), 500
+
+@app.route('/api/sos', methods=['POST'])
+def sos_route():
+    """
+    Handles the SOS request, gets GPS location, and sends a translated emergency message.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    lat = data.get('lat')
+    lon = data.get('lon')
+    source_lang = data.get('source_lang', 'en')
+    target_lang = data.get('target_lang', 'es')
+
+    if lat is None or lon is None:
+        return jsonify({"error": "Location not provided"}), 400
+
+    # Create the SOS message in English (or the source language)
+    sos_message = f"Emergency! I need help. My location is: https://www.google.com/maps?q={lat},{lon}"
+
+    try:
+        # Translate the message
+        translated_message = argostranslate.translate.translate(sos_message, source_lang, target_lang)
+
+        # ** SIMULATION **
+        # In a real app, you would integrate with an SMS gateway (like Twilio)
+        # or another notification service here.
+        print("--- SOS ACTIVATED ---")
+        print(f"Translated Message ({target_lang}): {translated_message}")
+        print("--------------------")
+
+        return jsonify({
+            "message": "SOS signal sent successfully.",
+            "translated_sos_alert": translated_message
+        })
+
+    except Exception as e:
+        print(f"SOS Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # --- Main Execution ---

@@ -5,21 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Melingua Connect</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    <!-- React and Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <style>
         body {
@@ -72,8 +71,18 @@
             70% { box-shadow: 0 0 15px 10px rgba(239, 68, 68, 0); }
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
+
+        /* --- SOS Button Animation --- */
+        .sos-button:hover {
+            animation: sos-pulse 1s infinite;
+        }
+        @keyframes sos-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 15px 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
         
-        /* --- Sign Language Modal Styles --- */
+        /* --- Modal Styles (for Sign Language and Map) --- */
         .modal-backdrop {
             position: fixed;
             top: 0;
@@ -117,6 +126,15 @@
             color: #fff;
             font-size: 1.5rem;
             cursor: pointer;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            background-color: #333;
+        }
+        .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
 
         /* --- Style for highlighted keywords --- */
@@ -235,7 +253,7 @@
             );
         };
         
-        const Header = ({ sourceLang, targetLang, setSourceLang, setTargetLang, languages, onSwap }) => (
+        const Header = ({ sourceLang, targetLang, setSourceLang, setTargetLang, languages, onSwap, onSOS }) => (
             <header className="p-4 flex items-center justify-between border-b border-white/10">
                 <h1 className="text-xl font-bold">MediLingua Connect</h1>
                 <div className="flex items-center gap-4">
@@ -244,14 +262,20 @@
                         <i className="bi bi-arrow-left-right text-gray-300"></i>
                     </button>
                     <LanguageSelector languages={languages} selectedLang={targetLang} onSelectLang={setTargetLang} label="To" />
+                    <button onClick={onSOS} title="Emergency SOS" className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-red-600/80 rounded-full hover:bg-red-500 text-white font-semibold tracking-wider transition-all duration-300 sos-button">
+                        SOS
+                    </button>
                 </div>
             </header>
         );
 
         const MessageBubble = ({ message, onSpeak, isSpeaking, onShowSignLanguage, onToggleRecommendations, onShowVisualAid }) => {
             const isUser = message.type === 'user';
+            const isError = message.type === 'error';
             const bubbleClass = isUser 
                 ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white' 
+                : isError
+                ? 'bg-red-800/50 text-red-200'
                 : 'bg-[#2E2E2E] text-gray-200';
 
             const renderMessageWithKeywords = () => {
@@ -297,17 +321,17 @@
                     <div className={`max-w-2xl p-4 rounded-2xl mb-4 relative fade-in ${bubbleClass} ${isSpeaking ? 'ring-2 ring-sky-400' : ''}`}>
                         {renderMessageWithKeywords()}
                         <div className="absolute -bottom-3 -right-1 flex items-center gap-1">
-                            {!isUser && (
+                            {!isUser && !isError && (
                                 <button onClick={() => onSpeak(message.text)} className="w-8 h-8 bg-gray-600 hover:bg-sky-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
                                    <i className={`bi ${isSpeaking ? 'bi-stop-circle-fill text-sky-300' : 'bi-volume-up-fill'}`}></i>
                                 </button>
                             )}
-                            {!isUser && firstVisualAidSearch && (
+                            {!isUser && !isError && firstVisualAidSearch && (
                                 <button onClick={() => onShowVisualAid(firstVisualAidSearch)} title="Show Visual Aid" className="w-8 h-8 bg-gray-600 hover:bg-green-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
                                     <i className="bi bi-image-fill text-green-300"></i>
                                 </button>
                             )}
-                            {!isUser && message.recommendations && message.recommendations.length > 0 && (
+                            {!isUser && !isError && message.recommendations && message.recommendations.length > 0 && (
                                 <button onClick={() => onToggleRecommendations(message.id)} title="Show Analysis" className="w-8 h-8 bg-gray-600 hover:bg-indigo-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110">
                                     <i className="bi bi-info-circle-fill text-indigo-300"></i>
                                 </button>
@@ -446,7 +470,7 @@
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="text-lg font-semibold">Sign Language Video</h2>
-                            <button onClick={onClose} className="modal-close-btn">&times;</button>
+                            <button onClick={onClose} className="modal-close-btn">×</button>
                         </div>
                         <div className="modal-body">
                             <iframe
@@ -457,6 +481,83 @@
                                 frameBorder="0"
                                 allowFullScreen
                             ></iframe>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MapModal = ({ isOpen, onClose, lat, lon }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+
+            useEffect(() => {
+                if (isOpen && !mapInstance.current) {
+                    // Initialize map
+                    mapInstance.current = L.map(mapRef.current).setView([lat, lon], 13);
+                    
+                    // Add OpenStreetMap tile layer
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    }).addTo(mapInstance.current);
+
+                    // Add user location marker
+                    const userIcon = L.divIcon({
+                        html: '<i class="bi bi-geo-alt-fill text-blue-500" style="font-size: 2rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));"></i>',
+                        className: 'bg-transparent border-0',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32]
+                    });
+                    L.marker([lat, lon], {icon: userIcon}).addTo(mapInstance.current).bindPopup('<b>Your Location</b>').openPopup();
+
+                    // Fetch nearby hospitals from Overpass API
+                    const radius = 5000; // 5km
+                    const query = `[out:json];(node["amenity"="hospital"](around:${radius},${lat},${lon});way["amenity"="hospital"](around:${radius},${lat},${lon});relation["amenity"="hospital"](around:${radius},${lat},${lon}););out center;`;
+                    
+                    fetch('https://overpass-api.de/api/interpreter', {
+                        method: 'POST',
+                        body: query
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        const hospitalIcon = L.divIcon({
+                            html: '<i class="bi bi-hospital-fill text-red-500" style="font-size: 1.5rem;"></i>',
+                            className: 'bg-transparent border-0',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 24]
+                        });
+                        data.elements.forEach(element => {
+                            const name = element.tags?.name || 'Hospital';
+                            if (element.type === 'node') {
+                                L.marker([element.lat, element.lon], {icon: hospitalIcon}).addTo(mapInstance.current).bindPopup(name);
+                            } else if (element.center) {
+                                L.marker([element.center.lat, element.center.lon], {icon: hospitalIcon}).addTo(mapInstance.current).bindPopup(name);
+                            }
+                        });
+                    })
+                    .catch(error => console.error('Error fetching hospitals:', error));
+                }
+
+                // Cleanup on close
+                return () => {
+                    if (mapInstance.current) {
+                        mapInstance.current.remove();
+                        mapInstance.current = null;
+                    }
+                };
+            }, [isOpen, lat, lon]);
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="modal-backdrop" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 className="text-lg font-semibold">Nearby Hospitals</h2>
+                            <button onClick={onClose} className="modal-close-btn">×</button>
+                        </div>
+                        <div className="modal-body p-0">
+                           <div id="map" ref={mapRef}></div>
                         </div>
                     </div>
                 </div>
@@ -476,7 +577,11 @@
             const [speakingText, setSpeakingText] = useState(null);
             const [isListening, setIsListening] = useState(false);
             const [text, setText] = useState("");
+            
             const [signVideoUrl, setSignVideoUrl] = useState('');
+            const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+            const [userLocation, setUserLocation] = useState(null);
+
             const [visibleRecommendations, setVisibleRecommendations] = useState({});
             const recognitionRef = useRef(null);
 
@@ -589,6 +694,46 @@
                     [messageId]: !prev[messageId]
                 }));
             };
+            
+            const addMessageToActiveChat = (message) => {
+                 setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, message] } : c));
+            };
+
+            const handleSOS = () => {
+                if (!navigator.geolocation) {
+                    alert("Geolocation is not supported by your browser.");
+                    return;
+                }
+
+                addMessageToActiveChat({id: Date.now(), type: 'user', text: 'SOS signal activated. Fetching location...'});
+
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude } = position.coords;
+
+                    // Set state to open the map modal
+                    setUserLocation({ latitude, longitude });
+                    setIsMapModalOpen(true);
+                    
+                    try {
+                         const response = await fetch(`${API_BASE_URL}/api/sos`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat: latitude, lon: longitude, source_lang: sourceLang, target_lang: targetLang })
+                        });
+                        if (!response.ok) throw new Error((await response.json()).error || 'SOS signal failed');
+                        const data = await response.json();
+                        addMessageToActiveChat({id: Date.now() + 1, type: 'ai', text: data.translated_sos_alert });
+
+                    } catch(error) {
+                        console.error("SOS failed:", error);
+                        addMessageToActiveChat({ id: Date.now() + 1, type: 'error', text: `SOS failed: ${error.message}` });
+                    }
+
+                }, (error) => {
+                    console.error("Geolocation error:", error);
+                    addMessageToActiveChat({ id: Date.now() + 1, type: 'error', text: `Could not get location: ${error.message}` });
+                });
+            };
 
             const handleTranslate = async (textToTranslate) => {
                 if (!textToTranslate.trim() || !sourceLang || !targetLang) return;
@@ -596,7 +741,7 @@
                 
                 setText("");
 
-                setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessage] } : c));
+                addMessageToActiveChat(userMessage);
                 setIsLoading(true);
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/translate`, {
@@ -614,11 +759,11 @@
                         keywords: data.keywords || [],
                         recommendations: data.recommendations || []
                     };
-                    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, aiMessage] } : c));
+                    addMessageToActiveChat(aiMessage);
                 } catch (error) {
                     console.error("Translation failed:", error);
                     const errorMessage = { id: Date.now() + 1, type: 'error', text: `Translation failed: ${error.message}`, keywords: [], recommendations: [] };
-                     setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, errorMessage] } : c));
+                     addMessageToActiveChat(errorMessage);
                 } finally {
                     setIsLoading(false);
                 }
@@ -630,7 +775,7 @@
                 formData.append('target_lang', targetLang);
                 
                 const userMessage = { id: Date.now(), type: 'user', text: `File: ${file.name}`, keywords: [], recommendations: [] };
-                setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessage] } : c));
+                addMessageToActiveChat(userMessage);
                 setIsLoading(true);
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/translate-file`, {
@@ -647,11 +792,11 @@
                         keywords: data.keywords || [], 
                         recommendations: [] 
                     };
-                    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, aiMessage] } : c));
+                    addMessageToActiveChat(aiMessage);
                 } catch (error) {
                     console.error("File translation failed:", error);
                     const errorMessage = { id: Date.now() + 1, type: 'error', text: `File translation failed: ${error.message}`, keywords: [], recommendations: [] };
-                     setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, errorMessage] } : c));
+                     addMessageToActiveChat(errorMessage);
                 } finally {
                     setIsLoading(false);
                 }
@@ -676,6 +821,7 @@
                             setTargetLang={setTargetLang}
                             languages={languages}
                             onSwap={handleSwapLanguages}
+                            onSOS={handleSOS}
                         />
                         <ChatArea 
                             messages={activeConversation?.messages || []} 
@@ -698,6 +844,12 @@
                         />
                     </main>
                     <SignLanguageModal videoUrl={signVideoUrl} onClose={() => setSignVideoUrl('')} />
+                    <MapModal 
+                        isOpen={isMapModalOpen} 
+                        onClose={() => setIsMapModalOpen(false)} 
+                        lat={userLocation?.latitude} 
+                        lon={userLocation?.longitude} 
+                    />
                 </div>
             );
         };
