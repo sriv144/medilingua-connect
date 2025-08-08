@@ -8,40 +8,28 @@ import fitz  # PyMuPDF
 import docx
 import pandas as pd
 from urllib.parse import quote
+import requests # Import the requests library
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
 CORS(app) # Enable Cross-Origin Resource Sharing
 
 # --- Configuration ---
-# Create a directory for file uploads if it doesn't exist
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # --- Argos Translate Setup ---
-# Download and install required language packages
 print("Checking for language model updates...")
 argostranslate.package.update_package_index()
 available_packages = argostranslate.package.get_available_packages()
-
-# We will only install essential languages for now to speed up the first run.
 LANGUAGES_TO_INSTALL = ["en", "es", "hi"]
-
-# Get a list of already installed language codes ONCE.
 installed_langs = [lang.code for lang in argostranslate.translate.get_installed_languages()]
 print(f"Installed languages found: {installed_langs}")
-
 for lang_code in LANGUAGES_TO_INSTALL:
     if lang_code not in installed_langs:
-        package_to_install = next(
-            filter(
-                lambda x: x.from_code == lang_code and x.to_code == "en",
-                available_packages
-            ),
-            None
-        )
+        package_to_install = next(filter(lambda x: x.from_code == lang_code and x.to_code == "en", available_packages), None)
         if package_to_install:
             print(f"Downloading and installing language package: {lang_code}")
             package_to_install.install()
@@ -50,8 +38,7 @@ for lang_code in LANGUAGES_TO_INSTALL:
     else:
         print(f"Language package already installed: {lang_code}")
 
-
-# --- Expanded Medical Glossary and Department Mapping ---
+# --- Medical Glossary and Mappings ---
 medical_glossary = {
     "fever": {"en": "fever", "hi": "बुखार", "es": "fiebre", "de": "Fieber", "fr": "fièvre"},
     "cancer": {"en": "cancer", "hi": "कैंसर", "es": "cáncer", "de": "Krebs", "fr": "cancer"},
@@ -76,7 +63,7 @@ symptom_to_department = {
     "pain": ["General Medicine", "Orthopedics"],
     "heart attack": ["Cardiology", "Emergency"],
     "cancer": ["Oncology"],
-    "diabetes": ["Endocrinología"],
+    "diabetes": ["Endocrinology"],
     "cough": ["Pulmonology", "General Medicine"],
     "fracture": ["Orthopedics", "Emergency"],
     "dizziness": ["Neurology", "ENT"],
@@ -104,33 +91,22 @@ department_translations = {
 }
 
 # --- Helper Functions ---
-
 def find_medical_keywords(text, source_lang):
-    """
-    Identifies medical terms in a given text based on the glossary using regex for flexibility.
-    """
     found_keywords = []
     lower_text = text.lower()
-    
     for english_term, translations in medical_glossary.items():
         if source_lang in translations:
             terms_to_find = translations[source_lang]
             if not isinstance(terms_to_find, list):
                 terms_to_find = [terms_to_find]
-            
             for term in terms_to_find:
-                # Allow for spaces between words, e.g., "head ache" vs "headache"
                 pattern = r'\b' + r'\s*'.join(re.escape(word) for word in term.lower().split()) + r'\b'
                 if re.search(pattern, lower_text):
                     found_keywords.append(english_term)
-                    break # Move to the next english_term once a match is found
-
+                    break 
     return list(set(found_keywords))
 
 def process_file(filepath):
-    """
-    Extracts text content from various file types (PDF, DOCX, CSV, TXT).
-    """
     _, extension = os.path.splitext(filepath)
     text = ""
     try:
@@ -155,71 +131,44 @@ def process_file(filepath):
         return f"Error reading file: {e}"
     return text
 
-
 # --- API Endpoints ---
-
 @app.route('/')
 def index():
-    """
-    Serves the main HTML file for the React frontend.
-    """
     return render_template('index.html')
-
 
 @app.route('/api/languages', methods=['GET'])
 def get_languages():
-    """
-    Returns a list of installed and available languages for translation.
-    """
     installed_languages = argostranslate.translate.get_installed_languages()
     lang_list = [{"name": lang.name, "code": lang.code} for lang in installed_languages]
     return jsonify(lang_list)
 
 @app.route('/api/translate', methods=['POST'])
 def translate_text_route():
-    """
-    Translates text, identifies keywords, and provides department recommendations.
-    """
     data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({"error": "No text provided"}), 400
-
     text_to_translate = data.get('text')
     source_lang = data.get('source_lang', 'en')
     target_lang = data.get('target_lang', 'es')
-
     if not text_to_translate.strip():
         return jsonify({"translated_text": "", "keywords": [], "recommendations": []})
-
     try:
         keywords_in_english = find_medical_keywords(text_to_translate, source_lang)
         translated_text = argostranslate.translate.translate(text_to_translate, source_lang, target_lang)
-        
         keywords_data = []
         if keywords_in_english:
             for english_keyword in keywords_in_english:
-                # Dynamically create a safe search URL for a medical diagram
                 query = f'"{english_keyword}" medical diagram anatomy'
                 search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
-                
                 if target_lang in medical_glossary.get(english_keyword, {}):
                     translated_terms = medical_glossary[english_keyword][target_lang]
                     if not isinstance(translated_terms, list):
                         translated_terms = [translated_terms]
-                    
                     for term in translated_terms:
                         pattern = r'\b' + re.escape(term) + r'\w*\b'
                         match = re.search(pattern, translated_text, re.IGNORECASE)
-                        
                         if match:
                             actual_term_in_text = match.group(0)
-                            keywords_data.append({
-                                "term": actual_term_in_text,
-                                "english": english_keyword,
-                                "visual_aid_search": search_url
-                            })
+                            keywords_data.append({"term": actual_term_in_text, "english": english_keyword, "visual_aid_search": search_url})
                             break
-
         recommendations = []
         if keywords_in_english:
             departments = set()
@@ -227,44 +176,27 @@ def translate_text_route():
                 if keyword in symptom_to_department:
                     for dept in symptom_to_department[keyword]:
                         departments.add(dept)
-            
             for dept in departments:
                 if target_lang in department_translations.get(dept, {}):
                     recommendations.append(department_translations[dept][target_lang])
-
-        return jsonify({
-            "translated_text": translated_text,
-            "keywords": keywords_data,
-            "recommendations": recommendations
-        })
-
+        return jsonify({"translated_text": translated_text, "keywords": keywords_data, "recommendations": recommendations})
     except Exception as e:
         print(f"Translation Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/translate-file', methods=['POST'])
 def translate_file_route():
-    """
-    Handles file upload, processes the content, and translates it.
-    """
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
+    if 'file' not in request.files: return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
+    if file.filename == '': return jsonify({'error': 'No selected file'}), 400
     try:
         target_lang = request.form.get('target_lang', 'es')
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(filepath)
-        
         processed_text = process_file(filepath)
         source_lang_of_file = 'en'
-        
         keywords_in_english = find_medical_keywords(processed_text, source_lang_of_file)
         translated_text = argostranslate.translate.translate(processed_text, source_lang_of_file, target_lang)
-        
         keywords_data = []
         if keywords_in_english:
             for english_keyword in keywords_in_english:
@@ -274,69 +206,74 @@ def translate_file_route():
                     translated_terms = medical_glossary[english_keyword][target_lang]
                     if not isinstance(translated_terms, list):
                         translated_terms = [translated_terms]
-                    
                     for term in translated_terms:
                         pattern = r'\b' + re.escape(term) + r'\w*\b'
                         match = re.search(pattern, translated_text, re.IGNORECASE)
                         if match:
                             actual_term_in_text = match.group(0)
-                            keywords_data.append({
-                                "term": actual_term_in_text, 
-                                "english": english_keyword,
-                                "visual_aid_search": search_url
-                            })
+                            keywords_data.append({"term": actual_term_in_text, "english": english_keyword, "visual_aid_search": search_url})
                             break
-
         os.remove(filepath)
-        
         return jsonify({'translated_text': translated_text, 'keywords': keywords_data})
-        
     except Exception as e:
         print(f"File Translation Error: {e}")
         if 'filepath' in locals() and os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'error': f'An unexpected error occurred: {e}'}), 500
 
-@app.route('/api/sos', methods=['POST'])
-def sos_route():
-    """
-    Handles the SOS request, gets GPS location, and sends a translated emergency message.
-    """
+@app.route('/api/nearby-hospitals-osm', methods=['POST'])
+def nearby_hospitals_osm():
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-
-    lat = data.get('lat')
-    lon = data.get('lon')
-    source_lang = data.get('source_lang', 'en')
-    target_lang = data.get('target_lang', 'es')
-
-    if lat is None or lon is None:
-        return jsonify({"error": "Location not provided"}), 400
-
-    # Create the SOS message in English (or the source language)
-    sos_message = f"Emergency! I need help. My location is: https://www.google.com/maps?q={lat},{lon}"
-
+    if not data or 'lat' not in data or 'lon' not in data:
+        return jsonify({"error": "Latitude or longitude not provided"}), 400
+    lat = data['lat']
+    lon = data['lon']
+    overpass_query = f"""
+    [out:json];(node["amenity"="hospital"](around:10000,{lat},{lon});way["amenity"="hospital"](around:10000,{lat},{lon});relation["amenity"="hospital"](around:10000,{lat},{lon}););out center;
+    """
+    overpass_url = "http://overpass-api.de/api/interpreter"
     try:
-        # Translate the message
-        translated_message = argostranslate.translate.translate(sos_message, source_lang, target_lang)
-
-        # ** SIMULATION **
-        # In a real app, you would integrate with an SMS gateway (like Twilio)
-        # or another notification service here.
-        print("--- SOS ACTIVATED ---")
-        print(f"Translated Message ({target_lang}): {translated_message}")
-        print("--------------------")
-
-        return jsonify({
-            "message": "SOS signal sent successfully.",
-            "translated_sos_alert": translated_message
-        })
-
-    except Exception as e:
-        print(f"SOS Error: {e}")
-        return jsonify({"error": str(e)}), 500
-
+        response = requests.post(overpass_url, data=overpass_query)
+        response.raise_for_status()
+        hospital_data = response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Overpass API Error: {e}")
+        return jsonify({"error": "Could not connect to map service to find hospitals."}), 500
+    hospitals = []
+    for element in hospital_data.get('elements', []):
+        tags = element.get('tags', {})
+        name = tags.get('name', 'Unnamed Hospital')
+        if element['type'] == 'node':
+            h_lat, h_lon = element.get('lat'), element.get('lon')
+        else:
+            center = element.get('center', {})
+            h_lat, h_lon = center.get('lat'), center.get('lon')
+        if h_lat and h_lon:
+            hospitals.append({"id": element['id'], "name": name, "lat": h_lat, "lon": h_lon})
+    if not hospitals:
+        return jsonify({"error": "No hospitals found nearby."}), 404
+    osrm_base_url = "http://router.project-osrm.org/route/v1/driving/"
+    results = []
+    for hospital in hospitals[:5]:
+        try:
+            coords = f"{lon},{lat};{hospital['lon']},{hospital['lat']}"
+            osrm_url = f"{osrm_base_url}{coords}?overview=full&geometries=geojson"
+            route_response = requests.get(osrm_url)
+            route_response.raise_for_status()
+            route_data = route_response.json()
+            if route_data['code'] == 'Ok' and route_data.get('routes'):
+                route_info = route_data['routes'][0]
+                hospital['distance'] = route_info.get('distance', 0)
+                hospital['duration'] = route_info.get('duration', 0)
+                hospital['geometry'] = route_info.get('geometry')
+                results.append(hospital)
+        except requests.exceptions.RequestException as e:
+            print(f"OSRM API Error for {hospital['name']}: {e}")
+            hospital['distance'] = -1
+            hospital['duration'] = -1
+            results.append(hospital)
+    results.sort(key=lambda x: x.get('distance', float('inf')))
+    return jsonify(results)
 
 # --- Main Execution ---
 if __name__ == '__main__':
