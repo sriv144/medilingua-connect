@@ -5,22 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Melingua Connect</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    <!-- Leaflet.js for Maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-    <!-- React and Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -165,7 +160,17 @@
             return <div className={`w-full flex ${isUser ? 'justify-end' : 'justify-start'}`}><div className={`max-w-2xl p-4 rounded-2xl mb-4 relative fade-in ${isUser ? 'bg-indigo-600' : 'bg-gray-700'} ${isSpeaking ? 'ring-2 ring-sky-400' : ''}`}>{renderMessageWithKeywords()}<div className="absolute -bottom-3 -right-1 flex items-center gap-1">{!isUser && <button onClick={() => onSpeak(message.text)} className="w-8 h-8 bg-gray-600 hover:bg-sky-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110"><i className={`bi ${isSpeaking ? 'bi-stop-circle-fill text-sky-300' : 'bi-volume-up-fill'}`}></i></button>}{!isUser && message.recommendations && message.recommendations.length > 0 && <button onClick={() => onToggleRecommendations(message.id)} title="Show Analysis" className="w-8 h-8 bg-gray-600 hover:bg-indigo-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110"><i className="bi bi-info-circle-fill text-indigo-300"></i></button>}</div></div></div>;
         };
 
-        const RecommendationsPanel = ({ recommendations }) => <div className="recommendations-panel"><h4 className="font-semibold text-indigo-300 mb-2">Recommended Departments:</h4><ul className="list-disc pl-5 text-gray-300"> {recommendations.map((dept, index) => <li key={index}>{dept}</li>)}</ul></div>;
+        const RecommendationsPanel = ({ recommendations }) => (
+            <div className="recommendations-panel">
+                <p className="text-xs text-gray-400 mb-2">Disclaimer: This is not a substitute for professional medical advice. Always consult with a qualified health provider for a diagnosis and treatment plan.</p>
+                <h4 className="font-semibold text-indigo-300 mb-2">Recommended Departments:</h4>
+                <ul className="list-disc pl-5 text-gray-300">
+                    {recommendations.map((rec, index) => (
+                        <li key={index}>{rec.keyword} - {rec.department}</li>
+                    ))}
+                </ul>
+            </div>
+        );
         const ThinkingIndicator = () => <div className="w-full flex justify-start"><div className="max-w-2xl p-4 rounded-2xl mb-4 bg-gray-700 flex items-center gap-2"><div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div><div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div><div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse"></div></div></div>;
 
         const ChatArea = ({ messages, isLoading, onSpeak, speakingText, onToggleRecommendations, visibleRecommendations, onKeywordClick }) => {
@@ -215,7 +220,7 @@
             if (!isOpen) return null;
             const formatDistance = (m) => m < 0 ? "N/A" : m > 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
             const formatDuration = (s) => s < 0 ? "N/A" : `${Math.round(s / 60)} min drive`;
-            return <div className="modal-backdrop"><div className="modal-content" style={{width: '90vw', maxWidth: '1200px', height: '90vh', maxHeight: '800px'}}><div className="modal-header"><h2 className="text-xl font-semibold">Nearby Hospitals</h2><button onClick={onClose} className="modal-close-btn">&times;</button></div><div className="modal-body"><aside className="w-1/3 bg-gray-900 p-4 flex flex-col custom-scrollbar overflow-y-auto"><h3 className="text-lg font-bold mb-4 text-gray-200">Nearest Locations</h3>{error && <div className="text-red-400 p-3 bg-red-500/20 rounded-lg">{error}</div>}<ul>{hospitals.map(h => <li key={h.id} onClick={() => setSelectedHospital(h)} className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${selectedHospital?.id === h.id ? 'bg-indigo-600' : 'bg-gray-700 hover:bg-gray-600'}`}><h4 className="font-semibold">{h.name}</h4><div className="text-sm text-gray-300 flex justify-between mt-1"><span>{formatDistance(h.distance)}</span><span>{formatDuration(h.duration)}</span></div></li>)}</ul></aside><main className="w-2/3">{userLocation && <div id="map"></div>}</main></div></div></div>;
+            return <div className="modal-backdrop"><div className="modal-content" style={{width: '90vw', maxWidth: '1200px', height: '90vh', maxHeight: '800px'}}><div className="modal-header"><h2 className="text-xl font-semibold">Nearby Hospitals</h2><button onClick={onClose} className="modal-close-btn">&times;</button></div><div className="modal-body"><aside className="w-1/3 bg-gray-900 p-4 flex flex-col custom-scrollbar overflow-y-auto"><h3 className="text-lg font-bold mb-4 text-gray-200">Nearest Locations</h3>{error && <div className="text-red-400 p-3 bg-red-500/20 rounded-lg">{error}</div>}<ul>{hospitals.map(h => <li key={h.id} onClick={() => setSelectedHospital(h)} className={`p-3 rounded-lg cursor-pointer transition-colors mb-2 ${selectedHospital?.id === h.id ? 'bg-indigo-600' : 'bg-gray-700 hover:bg-gray-600'}`}><h4 className="font-semibold">{h.name}</h4><div className="text-sm text-gray-300 flex justify-between mt-1"><span>{formatDistance(h.distance)}</span><span>{formatDuration(h.duration)}</span></div></li>)}</ul></aside><main className="w-2/3 h-full">{userLocation && <div id="map"></div>}</main></div></div></div>;
         };
         
         const KeywordActionModal = ({ data, onClose, onSelectSign, onSelectVisualAid }) => {
