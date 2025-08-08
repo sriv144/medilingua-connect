@@ -12,12 +12,26 @@ import requests
 from PIL import Image
 import io
 
-# --- Placeholder for Google Gemini API (Requires installation and setup) ---
-# To use this in a real app, install the library and set up your API key:
-# pip install -q google-generativeai
-# import google.generativeai as genai
-# genai.configure(api_key="YOUR_API_KEY")
-# model = genai.GenerativeModel('gemini-pro-vision')
+# --- Google Gemini API Integration ---
+# To use this, you must install the library: pip install -q google-generativeai
+# Then, get your API key from Google AI Studio and set it here.
+import google.generativeai as genai
+
+# --- PLEASE CONFIGURE YOUR API KEY HERE ---
+# It is strongly recommended to use environment variables for security.
+# For example: genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+try:
+    # Replace "YOUR_API_KEY" with your actual Google Gemini API key
+    genai.configure(api_key="AIzaSyDfLuKcudtSD2FIZ8LTwytkeqiFPL_cG4Q") 
+    # Initialize the Gemini Pro Vision model
+    # Replace it with this line
+    vision_model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    print("Gemini Vision model initialized successfully.")
+except Exception as e:
+    vision_model = None
+    print(f"!!! Gemini API Error: Could not configure the API. Please check your API key. Error: {e}")
+    print("!!! Image processing will not be available.")
+
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -136,95 +150,42 @@ medical_glossary = {
     "intestines": {"en": "intestines", "hi": "आंतें", "es": "intestinos", "de": "Darm", "fr": "intestins"},
     "spine": {"en": "spine", "hi": "रीढ़", "es": "columna vertebral", "de": "Wirbelsäule", "fr": "colonne vertébrale"}
 }
-
 symptom_to_department = {
-    "fever": ["General Medicine"],
-    "headache": ["Neurology", "General Medicine"],
-    "pain": ["General Medicine", "Orthopedics"],
-    "heart attack": ["Cardiology", "Emergency"],
-    "cancer": ["Oncology"],
-    "diabetes": ["Endocrinology"],
-    "cough": ["Pulmonology", "General Medicine"],
-    "fracture": ["Orthopedics", "Emergency"],
-    "dizziness": ["Neurology", "ENT"],
-    "nausea": ["Gastroenterology"],
-    "vomiting": ["Gastroenterology", "Emergency"],
-    "stroke": ["Neurology", "Emergency"],
-    "allergy": ["Allergy & Immunology"],
-    "infection": ["Infectious Disease", "General Medicine"],
-    "cold": ["General Medicine", "ENT"],
-    "hypertension": ["Cardiology", "General Medicine"],
-    "asthma": ["Pulmonology"],
-    "thyroid": ["Endocrinology"],
-    "arthritis": ["Rheumatology", "Orthopedics"],
-    "anemia": ["Hematology", "General Medicine"],
-    "migraine": ["Neurology"],
-    "pneumonia": ["Pulmonology", "Infectious Disease"],
-    "ulcer": ["Gastroenterology"],
-    "kidney stone": ["Urology", "Nephrology"],
-    "hepatitis": ["Gastroenterology", "Hepatology"],
-    "bronchitis": ["Pulmonology"],
-    "gastritis": ["Gastroenterology"],
-    "dementia": ["Neurology", "Geriatrics"],
-    "multiple sclerosis": ["Neurology"],
-    "epilepsy": ["Neurology"],
-    "osteoporosis": ["Orthopedics", "Endocrinology"],
-    "pneumothorax": ["Pulmonology", "Emergency"],
-    "appendicitis": ["General Surgery", "Emergency"],
-    "cataract": ["Ophthalmology"],
-    "glaucoma": ["Ophthalmology"],
-    "cirrhosis": ["Hepatology", "Gastroenterology"],
-    "sepsis": ["Infectious Disease", "Emergency", "General Medicine"],
-    "anaphylaxis": ["Allergy & Immunology", "Emergency"],
-    "arrhythmia": ["Cardiology"],
-    "emphysema": ["Pulmonology"],
-    "contusion": ["Orthopedics", "General Medicine"],
-    "edema": ["General Medicine", "Cardiology", "Nephrology"]
+    "fever": ["General Medicine"], "headache": ["Neurology", "General Medicine"], "pain": ["General Medicine", "Orthopedics"], "heart attack": ["Cardiology", "Emergency"], "cancer": ["Oncology"], "diabetes": ["Endocrinology"], "cough": ["Pulmonology", "General Medicine"], "fracture": ["Orthopedics", "Emergency"], "dizziness": ["Neurology", "ENT"], "nausea": ["Gastroenterology"], "vomiting": ["Gastroenterology", "Emergency"], "stroke": ["Neurology", "Emergency"], "allergy": ["Allergy & Immunology"], "infection": ["Infectious Disease", "General Medicine"], "cold": ["General Medicine", "ENT"], "hypertension": ["Cardiology", "General Medicine"], "asthma": ["Pulmonology"], "thyroid": ["Endocrinology"], "arthritis": ["Rheumatology", "Orthopedics"], "anemia": ["Hematology", "General Medicine"], "migraine": ["Neurology"], "pneumonia": ["Pulmonology", "Infectious Disease"], "ulcer": ["Gastroenterology"], "kidney stone": ["Urology", "Nephrology"], "hepatitis": ["Gastroenterology", "Hepatology"], "bronchitis": ["Pulmonology"], "gastritis": ["Gastroenterology"], "dementia": ["Neurology", "Geriatrics"], "multiple sclerosis": ["Neurology"], "epilepsy": ["Neurology"], "osteoporosis": ["Orthopedics", "Endocrinology"], "pneumothorax": ["Pulmonology", "Emergency"], "appendicitis": ["General Surgery", "Emergency"], "cataract": ["Ophthalmology"], "glaucoma": ["Ophthalmology"], "cirrhosis": ["Hepatology", "Gastroenterology"], "sepsis": ["Infectious Disease", "Emergency", "General Medicine"], "anaphylaxis": ["Allergy & Immunology", "Emergency"], "arrhythmia": ["Cardiology"], "emphysema": ["Pulmonology"], "contusion": ["Orthopedics", "General Medicine"], "edema": ["General Medicine", "Cardiology", "Nephrology"]
 }
-
 department_translations = {
-    "General Medicine": {"en": "General Medicine", "hi": "सामान्य चिकित्सा", "es": "Medicina General", "de": "Allgemeinmedizin"},
-    "Neurology": {"en": "Neurology", "hi": "तंत्रिका-विज्ञान", "es": "Neurología", "de": "Neurologie"},
-    "Orthopedics": {"en": "Orthopedics", "hi": "हड्डी रोग", "es": "Ortopedia", "de": "Orthopädie"},
-    "Emergency": {"en": "Emergency", "hi": "आपातकालीन", "es": "Emerencia", "de": "Notaufnahme"},
-    "Cardiology": {"en": "Cardiology", "hi": "हृदय रोग विज्ञान", "es": "Cardiología", "de": "Kardiologie"},
-    "Oncology": {"en": "Oncology", "hi": "कैंसर विज्ञान", "es": "Oncología", "de": "Onkologie"},
-    "Endocrinology": {"en": "Endocrinology", "hi": "अंतःस्त्राविका", "es": "Endocrinología", "de": "Endokrinologie"},
-    "Pulmonology": {"en": "Pulmonology", "hi": "फेफड़ा विज्ञान", "es": "Neumología", "de": "Pneumologie"},
-    "ENT": {"en": "ENT", "hi": "ईएनटी", "es": "Otorrinolaringología", "de": "HNO"},
-    "Gastroenterology": {"en": "Gastroenterology", "hi": "जठरांत्र विज्ञान", "es": "Gastroenterología", "de": "Gastroenterologie"},
-    "Allergy & Immunology": {"en": "Allergy & Immunology", "hi": "एलर्जी और इम्यूनोलॉजी", "es": "Alergia e Inmunología", "de": "Allergologie und Immunologie"},
-    "Infectious Disease": {"en": "Infectious Disease", "hi": "संक्रामक रोग", "es": "Enfermedades Infecciosas", "de": "Infektionskrankheiten"},
-    "Rheumatology": {"en": "Rheumatology", "hi": "संधिवातीयशास्त्र", "es": "Reumatología", "de": "Rheumatologie"},
-    "Hematology": {"en": "Hematology", "hi": "रुधिर विज्ञान", "es": "Hematología", "de": "Hämatologie"},
-    "Urology": {"en": "Urology", "hi": "मूत्रविज्ञान", "es": "Urología", "de": "Urologie"},
-    "Nephrology": {"en": "Nephrology", "hi": "गुर्दा रोग विज्ञान", "es": "Nefrología", "de": "Nephrologie"},
-    "Hepatology": {"en": "Hepatology", "hi": "यकृत विज्ञान", "es": "Hepatología", "de": "Hepatologie"},
-    "Geriatrics": {"en": "Geriatrics", "hi": "वृद्धावस्था चिकित्सा", "es": "Geriatría", "de": "Geriatrie"},
-    "General Surgery": {"en": "General Surgery", "hi": "सामान्य शल्य चिकित्सा", "es": "Cirugía General", "de": "Allgemeinchirurgie"},
-    "Ophthalmology": {"en": "Ophthalmology", "hi": "नेत्र विज्ञान", "es": "Oftalmología", "de": "Augenheilkunde"},
-    "Dermatology": {"en": "Dermatology", "hi": "त्वचा विज्ञान", "es": "Dermatología", "de": "Dermatologie"}
+    "General Medicine": {"en": "General Medicine", "hi": "सामान्य चिकित्सा", "es": "Medicina General", "de": "Allgemeinmedizin"}, "Neurology": {"en": "Neurology", "hi": "तंत्रिका-विज्ञान", "es": "Neurología", "de": "Neurologie"}, "Orthopedics": {"en": "Orthopedics", "hi": "हड्डी रोग", "es": "Ortopedia", "de": "Orthopädie"}, "Emergency": {"en": "Emergency", "hi": "आपातकालीन", "es": "Emerencia", "de": "Notaufnahme"}, "Cardiology": {"en": "Cardiology", "hi": "हृदय रोग विज्ञान", "es": "Cardiología", "de": "Kardiologie"}, "Oncology": {"en": "Oncology", "hi": "कैंसर विज्ञान", "es": "Oncología", "de": "Onkologie"}, "Endocrinology": {"en": "Endocrinology", "hi": "अंतःस्त्राविका", "es": "Endocrinología", "de": "Endokrinologie"}, "Pulmonology": {"en": "Pulmonology", "hi": "फेफड़ा विज्ञान", "es": "Neumología", "de": "Pneumologie"}, "ENT": {"en": "ENT", "hi": "ईएनटी", "es": "Otorrinolaringología", "de": "HNO"}, "Gastroenterology": {"en": "Gastroenterology", "hi": "जठरांत्र विज्ञान", "es": "Gastroenterología", "de": "Gastroenterologie"}, "Allergy & Immunology": {"en": "Allergy & Immunology", "hi": "एलर्जी और इम्यूनोलॉजी", "es": "Alergia e Inmunología", "de": "Allergologie und Immunologie"}, "Infectious Disease": {"en": "Infectious Disease", "hi": "संक्रामक रोग", "es": "Enfermedades Infecciosas", "de": "Infektionskrankheiten"}, "Rheumatology": {"en": "Rheumatology", "hi": "संधिवातीयशास्त्र", "es": "Reumatología", "de": "Rheumatologie"}, "Hematology": {"en": "Hematology", "hi": "रुधिर विज्ञान", "es": "Hematología", "de": "Hämatologie"}, "Urology": {"en": "Urology", "hi": "मूत्रविज्ञान", "es": "Urología", "de": "Urologie"}, "Nephrology": {"en": "Nephrology", "hi": "गुर्दा रोग विज्ञान", "es": "Nefrología", "de": "Nephrologie"}, "Hepatology": {"en": "Hepatology", "hi": "यकृत विज्ञान", "es": "Hepatología", "de": "Hepatologie"}, "Geriatrics": {"en": "Geriatrics", "hi": "वृद्धावस्था चिकित्सा", "es": "Geriatría", "de": "Geriatrie"}, "General Surgery": {"en": "General Surgery", "hi": "सामान्य शल्य चिकित्सा", "es": "Cirugía General", "de": "Allgemeinchirurgie"}, "Ophthalmology": {"en": "Ophthalmology", "hi": "नेत्र विज्ञान", "es": "Oftalmología", "de": "Augenheilkunde"}, "Dermatology": {"en": "Dermatology", "hi": "त्वचा विज्ञान", "es": "Dermatología", "de": "Dermatologie"}
 }
-
 
 def get_text_from_image(image_bytes):
     """
-    Simulates calling a Generative AI API to get text from an image.
-    In a real application, you would implement the actual API call here.
+    Calls the Gemini Vision API to get structured text from an image.
     """
+    if not vision_model:
+        print("Vision model not available. Returning error message.")
+        return "Error: Image processing service is not configured. Please check the API key."
     try:
-        # Placeholder for actual API call
-        # Example using the Google Gemini API (you would need to set this up)
-        # image = Image.open(io.BytesIO(image_bytes))
-        # response = model.generate_content(["Please extract all text from this image.", image])
-        # return response.text
+        print("Sending image to Gemini Vision API...")
+        image = Image.open(io.BytesIO(image_bytes))
         
-        # Simulated response for demonstration
-        print("Simulating image-to-text extraction...")
-        return "Simulated text from image: Laboratory results show high fever and a white blood cell count of 15,000. Recommend blood test."
+        # This prompt guides the model to be more helpful for our specific use case.
+        prompt = [
+            "You are a specialized OCR service for medical documents. ",
+            "Analyze this image and extract all text content. ",
+            "Prioritize clarity and structure. ",
+            "If it appears to be a medical report, lab result, or prescription, ",
+            "please identify and label key information such as Patient Name, Diagnosis, ",
+            "Medications, Dosages, and important values. If it is not a medical document, ",
+            "extract all text as clearly as possible.",
+            image
+        ]
+        
+        response = vision_model.generate_content(prompt)
+        print("Received response from Gemini.")
+        return response.text
     except Exception as e:
-        print(f"Error during image-to-text processing: {e}")
-        return ""
+        print(f"Error during Gemini API call: {e}")
+        return f"Error: Could not process image. Details: {e}"
 
 def find_medical_keywords(text, source_lang):
     found_keywords = []
@@ -245,22 +206,25 @@ def process_file(filepath):
     _, extension = os.path.splitext(filepath)
     text = ""
     try:
-        if extension == '.pdf':
+        # --- NEW: Added image file handling ---
+        if extension.lower() in ['.png', '.jpg', '.jpeg']:
+            print(f"Processing image file: {filepath}")
+            with open(filepath, 'rb') as f:
+                image_bytes = f.read()
+            text = get_text_from_image(image_bytes)
+        
+        elif extension == '.pdf':
             with fitz.open(filepath) as doc:
                 for page in doc:
-                    # Extract text from text layers
                     text += page.get_text()
-                    
-                    # Extract text from images on the page
                     image_list = page.get_images(full=True)
                     for img_index, img in enumerate(image_list):
                         xref = img[0]
                         base_image = doc.extract_image(xref)
                         image_bytes = base_image["image"]
-                        
-                        # Call the image-to-text function
+                        # Call the image-to-text function for images inside PDFs
                         text_from_image = get_text_from_image(image_bytes)
-                        text += f"\n{text_from_image}\n"
+                        text += f"\n--- [Image Content] ---\n{text_from_image}\n--- [End Image Content] ---\n"
 
         elif extension == '.docx':
             doc = docx.Document(filepath)
@@ -280,28 +244,11 @@ def process_file(filepath):
     return text
 
 def post_process_translation(text, lang_code):
-    """
-    Adds spaces to the translated text for languages that often lack proper tokenization.
-    This version uses a more robust, but still heuristic, approach based on character types.
-    
-    Args:
-        text (str): The translated text string.
-        lang_code (str): The language code of the translated text.
-    
-    Returns:
-        str: The formatted text with spaces.
-    """
-    if lang_code in ['bn', 'ur', 'el']: # Languages with common spacing issues
+    if lang_code in ['bn', 'ur', 'el']:
         print(f"Applying enhanced post-processing for language: {lang_code}")
-        
-        # A simple, universal approach: add a space between a character and a non-letter/digit character.
-        # This handles punctuation and other symbols, and is more robust than a language-specific tokenizer.
-        # It also removes duplicate spaces that might be introduced.
         text = re.sub(r'([^\w\s])', r' \1 ', text)
         text = re.sub(r'\s+', ' ', text)
-        
         return text.strip()
-    
     return text
 
 
@@ -327,8 +274,6 @@ def translate_text_route():
     try:
         keywords_in_english = find_medical_keywords(text_to_translate, source_lang)
         translated_text = argostranslate.translate.translate(text_to_translate, source_lang, target_lang)
-        
-        # --- NEW: Post-process the translated text for languages with formatting issues ---
         translated_text = post_process_translation(translated_text, target_lang)
         
         keywords_data = []
@@ -348,21 +293,13 @@ def translate_text_route():
                             keywords_data.append({"term": actual_term_in_text, "english": english_keyword, "visual_aid_search": search_url})
                             break
         
-        # --- NEW LOGIC: Create a structured list of recommendations ---
         recommendations = []
         if keywords_in_english:
             for english_keyword in keywords_in_english:
-                # Find departments for the English keyword
                 departments_for_keyword = symptom_to_department.get(english_keyword, [])
-                
-                # Get the translated term for the keyword
                 translated_keyword = medical_glossary[english_keyword].get(target_lang, english_keyword)
-                
                 for dept_english_name in departments_for_keyword:
-                    # Get the translated department name
                     translated_dept = department_translations.get(dept_english_name, {}).get(target_lang, dept_english_name)
-                    
-                    # Add to the recommendations list
                     recommendations.append({"keyword": translated_keyword, "department": translated_dept})
 
         return jsonify({"translated_text": translated_text, "keywords": keywords_data, "recommendations": recommendations})
@@ -379,14 +316,20 @@ def translate_file_route():
         target_lang = request.form.get('target_lang', 'es')
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(filepath)
+        
+        # process_file now handles images via Gemini
         processed_text = process_file(filepath)
-        # Attempt to determine source language of the file from the text
-        # For now, we'll assume English as a fallback.
+        
+        # If Gemini returned an error, pass it to the frontend
+        if processed_text.startswith("Error:"):
+            os.remove(filepath)
+            return jsonify({'translated_text': processed_text, 'keywords': []})
+
+        # Assume the extracted text is in English for keyword analysis.
+        # This could be enhanced with language detection in the future.
         source_lang_of_file = 'en'
         keywords_in_english = find_medical_keywords(processed_text, source_lang_of_file)
         translated_text = argostranslate.translate.translate(processed_text, source_lang_of_file, target_lang)
-        
-        # --- NEW: Post-process the translated text for languages with formatting issues ---
         translated_text = post_process_translation(translated_text, target_lang)
         
         keywords_data = []
@@ -396,8 +339,7 @@ def translate_file_route():
                 search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
                 if target_lang in medical_glossary.get(english_keyword, {}):
                     translated_terms = medical_glossary[english_keyword][target_lang]
-                    if not isinstance(translated_terms, list):
-                        translated_terms = [translated_terms]
+                    if not isinstance(translated_terms, list): translated_terms = [translated_terms]
                     for term in translated_terms:
                         pattern = r'\b' + re.escape(term) + r'\w*\b'
                         match = re.search(pattern, translated_text, re.IGNORECASE)
@@ -405,6 +347,7 @@ def translate_file_route():
                             actual_term_in_text = match.group(0)
                             keywords_data.append({"term": actual_term_in_text, "english": english_keyword, "visual_aid_search": search_url})
                             break
+                            
         os.remove(filepath)
         return jsonify({'translated_text': translated_text, 'keywords': keywords_data})
     except Exception as e:
